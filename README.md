@@ -1,1 +1,1 @@
-# GPTPublic
+This is th public git repo for PatinoTech
