@@ -1,0 +1,119 @@
+alias djact='source bin/activate'
+alias dj='djact && ./manage.py'
+alias djrs='dj runserver'
+alias ll='ls -lFH'
+alias la='ls -lAhS'
+alias grep='grep --color=auto'
+alias nano='nano -w'
+alias memusage="ps -u $LOGNAME -o pid,rss,command | sort -n +1 -2"
+alias visudo='sudo -E visudo'
+alias pycheck="python -m py_compile"
+alias djsp='python manage.py shell_plus --quiet-load'
+alias djmigrate='python manage.py migrate --merge --ignore-ghost-migrations'
+alias djact='. bin/activate'
+alias promote_dev='git checkout dev ; git pull ; git checkout staging ; git pull ; git merge origin/dev ; git push origin staging'
+alias promote_staging='git checkout staging ; git pull ; git checkout master ; git pull ; git merge origin/staging ; git push origin master'
+alias start_celery='C_FORCE_ROOT=1 celery worker -A topenguins -l info -c 1'
+alias check_restore_status='sqlcmd -U sa -S localhost -Q "select command, percent_complete from sys.dm_exec_requests where command like '"'"'restore database%'"'"'"'
+alias kpyc="find . -name '*.pyc' -delete"
+alias tf='/mnt/c/vs2017/Common7/IDE/CommonExtensions/Microsoft/TeamFoundation/Team\ Explorer/TF.exe'
+alias tfs_build='/mnt/c/vs2017/Common7/IDE/CommonExtensions/Microsoft/TeamFoundation/Team\ Explorer/TFSBuild.exe'
+alias charm='/mnt/c/Program\ Files\ \(x86\)/JetBrains/PyCharm\ 2018.2/bin/pycharm64.exe'
+function find_mail_errors() {
+  for x in `sudo tail -50000 /var/log/maillog | grep -Ei '(quota|perm|fail|error)' | cut -d':' -f4` ; do 
+    sudo grep $x /var/log/maillog | grep -i from | sed -E 's,^(.{15}).*from=<(.*)>.*$,\1     \2,'; 
+  done
+}
+alias djt='dj run_integration_tests -t'
+alias bonton_redshift='psql postgresql://awsuser@redshift-cluster-1.cdcvef269gao.us-east-2.redshift.amazonaws.com:5439/dev?sslmode=require'
+
+function git_made_easy(){
+    local CURRENT_BRANCH
+    local COMMIT_MESSAGE
+    local -A ARGERROR
+    local -A ARGDETAIL
+    local -A RESTRICTED
+    ARGDETAIL=(c "Commit all files to current branch" r "Rebase all local changes" b "Checkout to a local branch" R "Rebase current branch with dev")
+    ARGERROR=(c "Commit Message" b "Branch Name")
+    RESTRICTED=('dev' 1 'staging' 1 'production' 1 'master' 1)
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    function commit_all() {
+        if [[ -n "$RESTRICTED[$CURRENT_BRANCH]" ]]; then
+            echo "You are on not on a feature branch. ABORTING COMMIT!"
+        else
+            COMMIT_MESSAGE="$1"
+            git add .
+            git commit -m "[$CURRENT_BRANCH] $COMMIT_MESSAGE"
+        fi
+    }
+    function checkout_existing() {
+        git checkout $1
+    }
+    function rebase_branch() {
+        if [[ -n "$RESTRICTED[$CURRENT_BRANCH]" ]]; then
+            echo "You are not on a feature branch. ABORTING REBASE!"
+        else
+            local NUM
+            NUM=$(git log --oneline dev.. | wc -l)
+            echo "Rebasing $NUM commits on $CURRENT_BRANCH"
+            git rebase -i HEAD~${NUM}
+        fi
+    }
+    function rebase_dev() {
+        if [[ -n "$RESTRICTED[$CURRENT_BRANCH]" ]]; then
+            echo "On a restricted branch. ABORTING!!"
+        else
+            echo "Rebasing $CURRENT_BRANCH with dev"
+            checkout_existing dev
+            git pull
+            checkout_existing $CURRENT_BRANCH
+            git rebase origin/dev
+        fi
+    }
+    function help() {
+        echo "Usage: gme [-h] [-c] [-b] [-r] [-R]"
+        echo "Only one option allowed at a time(for now)"
+        echo "Restricted branches are dev, staging, master and production."
+        echo "-h: displays this help"
+        echo "-c [<arg>]: commits all files of current branch with given commit message prefixed by [BRANCHNAME]"
+        echo "-b [<arg>]: switch to an existing branch"
+        echo "-r: rebases all commits of current branch (only works if branched off of dev)"
+        echo "-R: rebases current branch with dev"
+    }
+    while getopts ":c:rRb:h" opt; do
+        case $opt in
+            c)
+                commit_all $OPTARG
+                return
+                ;;
+            r)
+                rebase_branch
+                return
+                ;;
+            R)
+                rebase_dev
+                return
+                ;;
+            b)
+                checkout_existing $OPTARG
+                return
+                ;;
+            \?)
+                echo "Unknown option: -$OPTARG"
+                help
+                return
+                ;;
+            :)
+                echo "Option -$OPTARG ($ARGDETAIL[$OPTARG]) requires an argument: $ARGERROR[$OPTARG]"
+                return
+                ;;
+            h)
+                help
+                return
+                ;;
+        esac
+    done
+}
+alias gme='git_made_easy'
+alias sqlplus="rlwrap -i -f ~/.sqlplus_history -H ~/.sqlplus_history -s 30000 sqlplus"
+alias rman="rlwrap -i -f ~/.rman_history -H ~/.rman_history -s 30000 rman"

@@ -1,0 +1,21 @@
+#!/bin/bash
+pushd $(dirname "$0") >/dev/null
+patinotech_dir=`pwd -P`
+popd
+rsync -rv --no-p --chmod=D0700,F600 "${patinotech_dir}/vim/" ~
+rsync -rv --no-p --chmod=D0700,F600 "${patinotech_dir}/zsh/" ~
+rsync -rv --no-p --chmod=D0700,F600 "${patinotech_dir}/ipython/" ~
+rsync -rv --no-p --chmod=D0700,F600 "${patinotech_dir}/bash/" ~
+if [[ -f zsh/$USER.zsh_aliases ]] ; then
+  rm -f ~/.zsh_aliases
+  cp ${patinotech_dir}/zsh/patinotech.zsh_aliases ~/.zsh_aliases
+  cat ${patinotech_dir}/zsh/$USER.zsh_aliases >>~/.zsh_aliases
+else
+  rm -f ~/.zsh_aliases
+  cp ${patinotech_dir}/zsh/patinotech.zsh_aliases ~/.zsh_aliases
+fi
+pushd ~
+find . -mindepth 1 -type d -\! -name '.cache' -prune -\! -name 'pip' -prune -\! -name '.npm' -prune -exec chmod 0700 {} \;
+popd
+source ~/.zshrc || true
+

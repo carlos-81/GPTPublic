@@ -1,0 +1,2 @@
+alias kpyc="find . -name '*.pyc' -delete"
+alias sqlplus="rlwrap -i -f ~/.sqlplus_history -H ~/.sqlplus_history -s 30000 sqlplus"

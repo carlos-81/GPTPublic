@@ -1,0 +1,268 @@
+# -*- mode: sh -*-
+# Nick's Fancy Prompt --
+#
+# This prompt is modular, meaning that new segments simply need to be
+# functions that print their output and be added to either `firstRow'
+# or `secondRow'.
+#
+# For example:
+#     myPromptExtra () {
+#         print "I'm in your prompt, widening your terminal"
+#     }
+#     firstRow+=(myPromptExtra)
+#
+
+local -aU first_row_functions second_row_functions aux_functions
+local perceived_width_of_dash=1
+local remote=false;
+local wsl=false;
+local wsl2=false ;
+local cygwin=false;
+local docker=false;
+local prefix="";
+local stupid_mac=false
+local border_color=""
+local blue="%{\e[34m%}"
+local white="%{\e[37;1m%}"
+local magenta="%{\e[36m%}"
+if [[ "${platform}" =~ microsoft ]] ; then
+    wsl=true ;
+    prefix="wsl"
+    border_color="%{\e[0m%}";
+    if [[ "${platform}" =~ wsl2 ]] ; then
+        wsl2=true ;
+        prefix="wsl2"
+    fi
+else
+   if [ -n "${docker_image}" ] ; then
+       # echo "docker setting prefix to: [${docker_image}]" >> .logfile
+       prefix="${docker_image}";
+       docker=true;
+       border_color="%{\e[31m%}";
+   else
+       if [[ "${platform}" =~ (amzn|centos|ubuntu|el8|el7|amazon) ]] ; then
+           remote=true ;
+           border_color="%{\e[34m%}";
+       else
+           if [[ "${platform}" =~ cygwin ]] ; then
+               prefix="cygwin";
+               border_color="%{\e[35m%}";
+               cygwin=true;
+           else
+               if [[ "${platform}" =~ (darwin|macos) ]] ; then
+                   stupid_mac=true
+                   prefix="mac"
+               fi
+           fi
+       fi
+   fi
+fi
+
+promptTitle () {
+    if [[ $INSIDE_EMACS != "" ]]; then
+        return
+    fi
+    if [[ -n $VIRTUAL_ENV ]]; then
+        print "\e]1;($(basename $VIRTUAL_ENV)) $(basename "$(pwd)")\a"
+    else
+        print -P "\e]1;%~\a"
+    fi
+}
+aux_functions+=(promptTitle)
+
+promptCwd () {
+    print "$(pwd)"
+}
+first_row_functions+=(promptCwd)
+
+export VIRTUAL_ENV_DISABLE_PROMPT=yes
+promptVenv () {
+    if [[ -n $VIRTUAL_ENV ]]; then
+        local venv=$(basename $VIRTUAL_ENV)
+        print "$venv"
+    fi
+}
+first_row_functions+=(promptVenv)
+
+promptGit () {
+    if [ "${cygwin}" = "true" ] ; then
+        return
+    fi
+    if ! which git 2>&1 >/dev/null; then
+        return
+    fi
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+        local branch=$(git symbolic-ref HEAD 2>/dev/null | cut -d'/' -f3-)
+        local revision=$(git rev-parse --short --verify HEAD 2>/dev/null || echo "<empty>")
+        print -n "$branch $revision"
+        # performance is relatively awful
+        # for anything other than native linux
+    fi
+}
+
+promptDirty() {
+    if [ "${cygwin}" = "true" ] ; then
+        return
+    fi
+    if ! which git 2>&1 >/dev/null; then
+        return
+    fi
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+        if ! git diff-index --quiet --ignore-submodules HEAD -- ; then
+            print -n "*" ;
+        else
+            print -n ""
+        fi
+    fi
+}
+first_row_functions+=(promptGit)
+
+function promptEnv {
+    print "${prefix}"
+}
+second_row_functions+=(promptEnv)
+
+promptUserHost () {
+    print -P "%n@%m" ;
+}
+second_row_functions+=(promptUserHost)
+
+promptDate () {
+    date +'%Y.%m.%d %I:%M%p' ;
+}
+second_row_functions+=(promptDate)
+
+promptHistoryNumber () {
+    print -P "[\e[36m%!\e[0m]"
+}
+# second_row_functions+=(promptHistoryNumber)
+
+promptPrompt () { # :)
+    if [[ $EUID == 0 ]]; then
+        print "➤"
+    else
+        print "➤"
+    fi
+}
+
+prompt () {
+    # start=$(date +%s%N | cut -b1-13)
+    [[ $TERM == eterm* ]] && export TERM=xterm
+    # [[ $(perceivedLength "\e[36mCyan\e[m") -ne 4 ]] && echo "perceivedLength is wrong! $ " && return
+    local dash='─'
+    local dash_length=$#dash
+    # local first_row="┌── " second_row="│" third_row="└ " current=""
+    local reset_color="%{\e[0m%}"
+    local first_row="${border_color}┏━━${reset_color} "
+    local second_row="${border_color}┣${reset_color}"
+    local third_row="${border_color}┗${reset_color} "
+    local current=""
+    for func in $aux_functions; do
+        $func
+    done
+
+    integer flen=3
+    current="$(promptCwd)"
+    first_row+="${current} "
+    (( flen += 1 + ${#current} ))
+    first_row+="${border_color}━━${reset_color}"
+    (( flen += 2 ))
+    current="$(promptVenv)"
+    if [[ -n $current ]] ; then
+        first_row+=" [${blue}$current${reset_color}] "
+        (( flen += 4))
+        (( flen += ${#current} ))
+        first_row+="${border_color}━━${reset_color}"
+        (( flen += 2 ))
+    fi 
+    current="$(promptGit)"
+    if [[ -n $current ]] ; then
+        first_row+=" [${blue}$current${reset_color}] "
+        (( flen += 4 ))
+        (( flen += ${#current} ))
+        current="$(promptDirty)"
+        if [[ -n $current ]] ; then
+            first_row+="${white}$current${reset_color} "
+            (( flen += 1 ))
+            (( flen += ${#current} ))
+        fi
+    fi
+    
+    integer sdashes=1
+    integer slen=1
+    current="$(promptEnv)"
+    if [[ -n $current ]] ; then
+        second_row+="${border_color}━━${reset_color}"
+        (( slen += 2 ))
+        second_row+=" ${current} "
+        (( slen += 2 ))
+        (( slen += ${#current} ))
+    fi
+    current="$(promptUserHost)"
+    if [[ -n $current ]] ; then
+        second_row+="${border_color}━━${reset_color}"
+        (( slen += 2 ))
+        second_row+=" ${magenta}${current}${reset_color} "
+        (( slen += 2 ))
+        (( slen += ${#current} ))
+    fi
+    current="$(promptDate)"
+    if [[ -n $current ]] ; then
+        second_row+="${border_color}━━${reset_color}"
+        (( slen += 2 ))
+        second_row+=" ${current} "
+        (( slen += 2 ))
+        (( slen += ${#current} ))
+    fi
+
+    while (( flen < slen )); do
+        first_row+="${border_color}━${reset_color}" ;
+        # first_row+="${border_color}─${reset_color}" ;
+        (( flen += 1 ))
+    done
+    while (( $flen > $slen )); do
+        second_row+="${border_color}━${reset_color}" ;
+        # second_row+="${border_color}─${reset_color}" ;
+        (( slen += 1 ))
+    done
+
+    first_row+="${border_color}━┓${reset_color}" ;
+    # first_row+="${border_color}─┐${reset_color}" ;
+    second_row+="${border_color}━━┛${reset_color}" ;
+    # second_row+="${border_color}─┘${reset_color}" ;
+    # end=$(date +%s%N | cut -b1-13)
+    # if [[ -n "${PROFILE_PROMPT}" ]] ; then
+    #     third_row+="$((end-start))ms "
+    # fi
+    current=$(promptPrompt | tr -d '\n')
+    third_row+="${white}$current${reset_color} "
+
+    print $first_row
+    print $second_row
+    print $third_row
+}
+
+prompt2 () {
+    print -n "│ > "
+}
+
+rprompt () {
+#     last_status=($pipestatus)
+#     typeset -U uniqs
+#     uniqs=($last_status)
+
+#     if [[ "$uniqs" == "0" ]]; then
+#         return
+#     fi
+# 
+#     if [[ $#last_status > 1 ]]; then
+#         local plural="es"
+#     else
+#         local plural=""
+#     fi
+#     if [[ $last_status != 0 ]]; then
+#         local current='%!'
+#         integer last=${(%)current}-1
+#         print "%F{cyan}$last%F{red} failed with status$plural %B${last_status}%b"
+#     fi
+}
